@@ -1,0 +1,161 @@
+<html>
+
+<head>
+    <link rel="icon" type="image/png" href="tonconnect-manifest/apple-touch-icon.png" />
+    <title>Test</title>
+</head>
+
+<body>
+    <button onclick="click_connect();">
+        Connect
+    </button>
+
+    <button id="sendsigndata" onclick="send_signdata();" disabled>
+        SendSignData
+    </button>
+</body>
+<script src="dist/tonconnect-sdk.min.js"></script>
+<script type="application/javascript">
+
+    async function _get_tg_wallet(connector) {
+        const walletsList = await connector.getWallets();
+        console.log(walletsList);
+
+        let wallet_info = undefined;
+        for (let i = 0; i < walletsList.length; i++) {
+            let wi = walletsList[i];
+            if (wi.appName == "telegram-wallet") {
+                wallet_info = wi
+            }
+        }
+
+        return wallet_info;
+    }
+
+    function convertToTGDeepLink(directLink) {
+        const parsed = new URL(directLink);
+        const [, domain, appname] = parsed.pathname.split('/');
+        const startapp = parsed.searchParams.get('startapp');
+        return `tg://resolve?domain=${domain}&appname=${appname}&startapp=${startapp}`;
+    }
+
+    function openDeeplinkWithFallback(href, fallback) {
+        const doFallback = () => {
+            if (isBrowser('safari') || (isOS('android') && isBrowser('firefox'))) {
+                // Safari does not support fallback to direct link.
+                return;
+            }
+
+            fallback();
+        };
+        const fallbackTimeout = setTimeout(() => doFallback(), 200);
+        window.addEventListener('blur', () => clearTimeout(fallbackTimeout), { once: true });
+
+        openLink(href, '_self');
+    }
+
+    function openLink(href, target = '_self') {
+        window.open(href, target, 'noopener noreferrer');
+    }
+
+    function openLinkBlank(href) {
+        openLink(href, '_blank');
+    }
+
+    function _dbg_conver_url(url) {
+        return url.replace(/--([0-9A-Fa-f]{2})/g, function (match, p1) {
+            return String.fromCharCode(parseInt(p1, 16));
+        });
+    }
+
+    const connector = new TonConnectSDK.TonConnect({
+        manifestUrl: 'http://172.23.55.245/tonconnect-manifest/tonconnect-manifest.json'
+        // manifestUrl: 'https://ton-connect.github.io/demo-dapp-with-wallet/tonconnect-manifest.json'
+    });
+
+    async function click_connect() {
+        // const connector = new TonConnectSDK.TonConnect();
+        let wallet_info = await _get_tg_wallet(connector);
+        connector.restoreConnection();
+
+        connector.onStatusChange(walletInfo => {
+            document.getElementById("sendsigndata").disabled = false;
+        });
+
+        if (connector.connected) {
+            console.log("connected");
+            document.getElementById("sendsigndata").disabled = false;
+        } else {
+            console.log("connect to tg wallet");
+            console.log(wallet_info);
+            let universal_link = connector.connect({
+                universalLink: wallet_info.universalLink,
+                bridgeUrl: wallet_info.bridgeUrl
+            });
+
+            // TODO addReturnStrategy
+            console.log(`universal_link: ${_dbg_conver_url(universal_link)}`);
+
+            const deep_link = convertToTGDeepLink(universal_link);
+            console.log(`deep_link: ${_dbg_conver_url(deep_link)}`);
+            openDeeplinkWithFallback(deep_link, () => openLinkBlank(universal_link));
+        }
+    }
+
+    function crc32(data) {
+        let crcTable = [];
+        let crc;
+        let i, j;
+
+        for (i = 0; i < 256; i++) {
+            crc = i;
+            for (j = 0; j < 8; j++) {
+                crc = (crc & 1) ? (crc >>> 1) ^ 0xEDB88320 : (crc >>> 1);
+            }
+            crcTable[i] = crc;
+        }
+
+        crc = 0xFFFFFFFF;
+        for (i = 0; i < data.length; i++) {
+            crc = (crc >>> 8) ^ crcTable[(crc ^ data.charCodeAt(i)) & 0xFF];
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    async function send_signdata() {
+        console.log(`wallet connect: ${connector.connected}`);
+        console.log(connector);
+
+        const onRequestSent = () => {
+            console.log('test dbg');
+        };
+
+        let data = btoa("Hello, world!");
+        crc32(data);
+
+        // let res = await connector.provider.sendRequest(
+        //     {
+        //         method: 'signData',
+        //         params: [
+        //             {
+        //                 schema_crc: crc32(data),
+        //                 cell: btoa(data),
+        //             }
+        //         ]
+        //     },
+        //     onRequestSent
+        // );
+        let res = await connector.provider.sendRequest(
+            {
+                method: 'disconnect',
+                params: []
+            },
+            onRequestSent
+        );
+
+        console.log('signData res:');
+        console.log(res);
+    }
+</script>
+
+</html>
