@@ -6,11 +6,15 @@
 </head>
 
 <body>
-    <button onclick="click_connect();">
+    <button id="Connect" onclick="click_connect();">
         Connect
     </button>
 
-    <button id="sendsigndata" onclick="send_signdata();" disabled>
+    <button id="SendTestTx" onclick="send_test_tx();" disabled>
+        SendTestTx
+    </button>
+
+    <button id="SendSignData" onclick="send_signdata();" disabled>
         SendSignData
     </button>
 </body>
@@ -79,27 +83,22 @@
         connector.restoreConnection();
 
         connector.onStatusChange(walletInfo => {
-            document.getElementById("sendsigndata").disabled = false;
+            document.getElementById("SendSignData").disabled = false;
+            document.getElementById("SendTestTx").disabled = false;
         });
 
-        if (connector.connected) {
-            console.log("connected");
-            document.getElementById("sendsigndata").disabled = false;
-        } else {
-            console.log("connect to tg wallet");
-            console.log(wallet_info);
-            let universal_link = connector.connect({
-                universalLink: wallet_info.universalLink,
-                bridgeUrl: wallet_info.bridgeUrl
-            });
+        console.log("connect to tg wallet");
+        console.log(wallet_info);
+        let universal_link = connector.connect({
+            universalLink: wallet_info.universalLink,
+            bridgeUrl: wallet_info.bridgeUrl
+        });
+        // TODO addReturnStrategy
 
-            // TODO addReturnStrategy
-            console.log(`universal_link: ${_dbg_conver_url(universal_link)}`);
-
-            const deep_link = convertToTGDeepLink(universal_link);
-            console.log(`deep_link: ${_dbg_conver_url(deep_link)}`);
-            openDeeplinkWithFallback(deep_link, () => openLinkBlank(universal_link));
-        }
+        const deep_link = convertToTGDeepLink(universal_link);
+        console.log(`universal_link: ${_dbg_conver_url(universal_link)}`);
+        console.log(`deep_link: ${_dbg_conver_url(deep_link)}`);
+        openDeeplinkWithFallback(deep_link, () => openLinkBlank(universal_link));
     }
 
     function crc32(data) {
@@ -155,6 +154,22 @@
 
         console.log('signData res:');
         console.log(res);
+    }
+
+    async function send_test_tx() {
+        console.log(await connector.sendTransaction({
+            validUntil: Math.floor(new Date() / 1000) + 360,
+            messages: [
+                {
+                    address: connector.wallet.account.address,
+                    amount: "200000000"
+                },
+                {
+                    address: "0:b2a1ecf5545e076cd36ae516ea7ebdf32aea008caa2b84af9866becb208895ad",
+                    amount: "100000000"
+                }
+            ]
+        }));
     }
 </script>
 
